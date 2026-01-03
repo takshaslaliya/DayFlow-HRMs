@@ -9,7 +9,8 @@ import {
     LogOut,
     CheckCircle2,
     XCircle,
-    AlertCircle
+    AlertCircle,
+    Loader2
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { attendanceRecords, leaveRequests, recentActivities } from '@/lib/mockData';
@@ -17,11 +18,48 @@ import { StatCard } from '@/components/ui/StatCard';
 import { Button } from '@/components/ui/button';
 import { PageTransition } from '@/components/layout/PageTransition';
 import { format, startOfWeek, addDays, isSameDay } from 'date-fns';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getTodayAttendance, checkIn, checkOut } from '@/features/attendance/api';
+import { toast } from 'sonner';
 
 export const EmployeeDashboard: React.FC = () => {
     const user = useAuthStore(state => state.user);
-    const [isCheckedIn, setIsCheckedIn] = useState(false);
-    const [checkInTime, setCheckInTime] = useState<string | null>(null);
+    const queryClient = useQueryClient();
+
+    // Fetch Today's Attendance
+    const { data: todayAttendance, isLoading: isLoadingAttendance } = useQuery({
+        queryKey: ['today-attendance', user?.id],
+        queryFn: () => getTodayAttendance(user?.id!),
+        enabled: !!user?.id,
+    });
+
+    // Check In Mutation
+    const checkInMutation = useMutation({
+        mutationFn: () => checkIn(user?.id!),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['today-attendance'] });
+            toast.success('checked in successfully!');
+        },
+        onError: (err: any) => {
+            toast.error(err.message || 'Failed to check in');
+        }
+    });
+
+    // Check Out Mutation
+    const checkOutMutation = useMutation({
+        mutationFn: () => checkOut(todayAttendance?.id!),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['today-attendance'] });
+            toast.success('checked out successfully!');
+        },
+        onError: (err: any) => {
+            toast.error(err.message || 'Failed to check out');
+        }
+    });
+
+    // Determine state
+    const isCheckedIn = !!todayAttendance && !todayAttendance.check_out;
+    const isCheckedOut = !!todayAttendance?.check_out;
 
     // Filter data for current employee (mock ID '2')
     const myAttendance = attendanceRecords.filter(r => r.employeeId === '2');
@@ -38,12 +76,12 @@ export const EmployeeDashboard: React.FC = () => {
     const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
     const handleCheckIn = () => {
-        setIsCheckedIn(true);
-        setCheckInTime(format(new Date(), 'HH:mm'));
+        checkInMutation.mutate();
     };
 
     const handleCheckOut = () => {
-        setIsCheckedIn(false);
+        if (!todayAttendance?.id) return;
+        checkOutMutation.mutate();
     };
 
     const getActivityIcon = (type: string) => {
@@ -129,15 +167,35 @@ export const EmployeeDashboard: React.FC = () => {
 
                         <div className="text-center py-6">
                             <div className="w-24 h-24 mx-auto rounded-full bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center mb-4 shadow-lg shadow-primary-200">
-                                <Clock className="w-10 h-10 text-white" />
+                                {checkInMutation.isPending || checkOutMutation.isPending || isLoadingAttendance ? (
+                                    <Loader2 className="w-10 h-10 text-white animate-spin" />
+                                ) : (
+                                    <Clock className="w-10 h-10 text-white" />
+                                )}
                             </div>
 
-                            {isCheckedIn ? (
+                            {isCheckedOut ? (
+                                <>
+                                    <p className="text-gray-500 font-medium mb-1">Shift Completed</p>
+                                    <div className="flex justify-center gap-4 text-sm text-gray-500 mb-4">
+                                        <span>In: {todayAttendance.check_in.slice(0, 5)}</span>
+                                        <span>Out: {todayAttendance.check_out?.slice(0, 5)}</span>
+                                    </div>
+                                    <Button
+                                        disabled
+                                        className="w-full bg-gray-100 text-gray-400 hover:bg-gray-100 cursor-not-allowed"
+                                    >
+                                        <CheckCircle2 className="w-4 h-4 mr-2" />
+                                        Completed
+                                    </Button>
+                                </>
+                            ) : isCheckedIn ? (
                                 <>
                                     <p className="text-green-600 font-medium mb-1">Checked In</p>
-                                    <p className="text-gray-500 text-sm mb-4">at {checkInTime}</p>
+                                    <p className="text-gray-500 text-sm mb-4">at {todayAttendance.check_in.slice(0, 5)}</p>
                                     <Button
                                         onClick={handleCheckOut}
+                                        disabled={checkOutMutation.isPending}
                                         variant="destructive"
                                         className="w-full"
                                     >
@@ -150,6 +208,7 @@ export const EmployeeDashboard: React.FC = () => {
                                     <p className="text-gray-500 mb-4">Not checked in yet</p>
                                     <Button
                                         onClick={handleCheckIn}
+                                        disabled={checkInMutation.isPending}
                                         className="w-full"
                                     >
                                         <LogIn className="w-4 h-4 mr-2" />

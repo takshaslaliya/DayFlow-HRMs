@@ -1,21 +1,33 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Search, Calendar, Clock } from 'lucide-react';
-import { attendanceRecords } from '@/lib/mockData';
+import { Search, Calendar, Clock, Loader2 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { StatusBadge, getAttendanceStatusVariant } from '@/components/ui/StatusBadge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { PageTransition } from '@/components/layout/PageTransition';
 import { format, parseISO, subDays, isWithinInterval } from 'date-fns';
+import { getAllAttendance } from '@/features/attendance/api';
+import type { AttendanceRecord } from '@/types';
 
 export const AdminAttendance: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [dateFilter, setDateFilter] = useState<'today' | 'week' | 'month'>('week');
 
+    // Fetch All Attendance
+    const { data: attendanceData = [], isLoading } = useQuery({
+        queryKey: ['all-attendance'],
+        queryFn: getAllAttendance
+    });
+
     // Filter records
-    const filteredRecords = attendanceRecords
-        .filter(r => {
-            const matchesSearch = (r.employeeName || '').toLowerCase().includes(searchQuery.toLowerCase());
+    const filteredRecords = attendanceData
+        .filter((r: AttendanceRecord) => {
+            const employeeName = r.employee
+                ? `${r.employee.first_name} ${r.employee.last_name}`
+                : 'Unknown';
+            const matchesSearch = employeeName.toLowerCase().includes(searchQuery.toLowerCase());
+
             const recordDate = parseISO(r.date);
             const today = new Date();
 
@@ -37,12 +49,14 @@ export const AdminAttendance: React.FC = () => {
         .slice(0, 50);
 
     // Stats
-    const todayRecords = attendanceRecords.filter(r => r.date === format(new Date(), 'yyyy-MM-dd'));
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const todayRecords = attendanceData.filter((r: AttendanceRecord) => r.date === todayStr);
     const stats = {
-        present: todayRecords.filter(r => r.status === 'present').length,
-        late: todayRecords.filter(r => r.status === 'late').length,
-        absent: todayRecords.filter(r => r.status === 'absent').length,
-        onLeave: todayRecords.filter(r => r.status === 'leave').length,
+        present: todayRecords.filter((r: AttendanceRecord) => r.status === 'PRESENT').length,
+        late: todayRecords.filter((r: AttendanceRecord) => r.status === 'LATE').length,
+        absent: todayRecords.filter((r: AttendanceRecord) => r.status === 'ABSENT').length,
+        // Assuming we map HALF_DAY to on leave or similar for basic stats
+        onLeave: todayRecords.filter((r: AttendanceRecord) => r.status === 'HALF_DAY').length,
     };
 
     return (
@@ -62,7 +76,7 @@ export const AdminAttendance: React.FC = () => {
                         { label: 'Present Today', value: stats.present, color: 'bg-emerald-500' },
                         { label: 'Late Today', value: stats.late, color: 'bg-yellow-500' },
                         { label: 'Absent Today', value: stats.absent, color: 'bg-red-500' },
-                        { label: 'On Leave', value: stats.onLeave, color: 'bg-gray-500' },
+                        { label: 'Half Day/Leave', value: stats.onLeave, color: 'bg-gray-500' },
                     ].map((stat, index) => (
                         <motion.div
                             key={stat.label}
@@ -115,7 +129,7 @@ export const AdminAttendance: React.FC = () => {
                         { label: 'Present', variant: 'success' },
                         { label: 'Late', variant: 'warning' },
                         { label: 'Absent', variant: 'destructive' },
-                        { label: 'On Leave', variant: 'muted' },
+                        { label: 'Half Day', variant: 'muted' },
                     ].map((item) => (
                         <StatusBadge key={item.label} variant={item.variant as any}>
                             {item.label}
@@ -130,67 +144,82 @@ export const AdminAttendance: React.FC = () => {
                     transition={{ delay: 0.2 }}
                     className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100"
                 >
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            <thead className="bg-gray-50/50 border-b border-gray-100">
-                                <tr>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">Employee</th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">Date</th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">Check In</th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">Check Out</th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">Work Hours</th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                                {filteredRecords.map((record, index) => (
-                                    <motion.tr
-                                        key={record.id}
-                                        initial={{ opacity: 0, x: -20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        transition={{ delay: 0.1 + index * 0.02 }}
-                                        className="hover:bg-gray-50/50 transition-colors"
-                                    >
-                                        <td className="px-6 py-4 font-medium text-gray-900">{record.employeeName}</td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-2 text-gray-500">
-                                                <Calendar className="w-4 h-4" />
-                                                {format(parseISO(record.date), 'MMM d, yyyy')}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            {record.checkIn ? (
-                                                <div className="flex items-center gap-2 text-gray-700">
-                                                    <Clock className="w-4 h-4 text-gray-400" />
-                                                    <span>{record.checkIn}</span>
+                    {isLoading ? (
+                        <div className="flex justify-center p-12">
+                            <Loader2 className="w-8 h-8 animate-spin text-primary-500" />
+                        </div>
+                    ) : filteredRecords.length === 0 ? (
+                        <div className="text-center py-8 text-gray-500">
+                            No attendance records found for this period.
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full">
+                                <thead className="bg-gray-50/50 border-b border-gray-100">
+                                    <tr>
+                                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">Employee</th>
+                                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">Date</th>
+                                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">Check In</th>
+                                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">Check Out</th>
+                                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">Work Hours</th>
+                                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {filteredRecords.map((record: AttendanceRecord, index: number) => (
+                                        <motion.tr
+                                            key={record.id}
+                                            initial={{ opacity: 0, x: -20 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            transition={{ delay: 0.1 + index * 0.02 }}
+                                            className="hover:bg-gray-50/50 transition-colors"
+                                        >
+                                            <td className="px-6 py-4 font-medium text-gray-900">
+                                                {record.employee
+                                                    ? `${record.employee.first_name} ${record.employee.last_name}`
+                                                    : 'Unknown'}
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-2 text-gray-500">
+                                                    <Calendar className="w-4 h-4" />
+                                                    {format(parseISO(record.date), 'MMM d, yyyy')}
                                                 </div>
-                                            ) : (
-                                                <span className="text-gray-400">—</span>
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            {record.checkOut ? (
-                                                <div className="flex items-center gap-2 text-gray-700">
-                                                    <Clock className="w-4 h-4 text-gray-400" />
-                                                    <span>{record.checkOut}</span>
-                                                </div>
-                                            ) : (
-                                                <span className="text-gray-400">—</span>
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-4 font-medium text-gray-900">
-                                            {record.workHours > 0 ? `${record.workHours}h` : '—'}
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <StatusBadge variant={getAttendanceStatusVariant(record.status)}>
-                                                {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
-                                            </StatusBadge>
-                                        </td>
-                                    </motion.tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                {record.check_in ? (
+                                                    <div className="flex items-center gap-2 text-gray-700">
+                                                        <Clock className="w-4 h-4 text-gray-400" />
+                                                        <span>{record.check_in.slice(0, 5)}</span>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-gray-400">—</span>
+                                                )}
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                {record.check_out ? (
+                                                    <div className="flex items-center gap-2 text-gray-700">
+                                                        <Clock className="w-4 h-4 text-gray-400" />
+                                                        <span>{record.check_out.slice(0, 5)}</span>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-gray-400">—</span>
+                                                )}
+                                            </td>
+                                            <td className="px-6 py-4 font-medium text-gray-900">
+                                                {record.work_hours ? `${record.work_hours}h` : '—'}
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <StatusBadge variant={getAttendanceStatusVariant(record.status.toLowerCase())}>
+                                                    {/* @ts-ignore */}
+                                                    {record.status.charAt(0).toUpperCase() + record.status.slice(1).toLowerCase()}
+                                                </StatusBadge>
+                                            </td>
+                                        </motion.tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
                 </motion.div>
             </div>
         </PageTransition>

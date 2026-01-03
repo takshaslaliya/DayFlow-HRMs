@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Calendar, X, Send } from 'lucide-react';
-import { leaveRequests } from '@/lib/mockData';
+import { Plus, Calendar, X, Send, Loader2 } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { StatusBadge, getLeaveStatusVariant, getLeaveTypeVariant } from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,8 +11,13 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { PageTransition } from '@/components/layout/PageTransition';
 import { format, parseISO, differenceInDays } from 'date-fns';
 import { toast } from 'sonner';
+import { useAuthStore } from '@/store/auth.store';
+import { getMyLeaves, createLeaveRequest } from './api';
+import type { LeaveRequest } from '@/types';
 
 export const EmployeeLeave: React.FC = () => {
+    const queryClient = useQueryClient();
+    const user = useAuthStore((state) => state.user);
     const [isApplyModalOpen, setIsApplyModalOpen] = useState(false);
     const [formData, setFormData] = useState({
         type: 'paid',
@@ -21,17 +26,35 @@ export const EmployeeLeave: React.FC = () => {
         reason: '',
     });
 
-    // Filter for current employee
-    const myLeaves = leaveRequests.filter(r => r.employeeId === '2');
+    // Fetch My Leaves
+    const { data: myLeaves = [], isLoading } = useQuery({
+        queryKey: ['my-leaves', user?.id],
+        queryFn: () => getMyLeaves(user?.id!),
+        enabled: !!user?.id,
+    });
+
+    // Create Leave Mutation
+    const createMutation = useMutation({
+        mutationFn: (data: typeof formData) => createLeaveRequest(user?.id!, data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['my-leaves'] });
+            toast.success('Leave request submitted successfully!');
+            setIsApplyModalOpen(false);
+            setFormData({ type: 'paid', startDate: '', endDate: '', reason: '' });
+        },
+        onError: (err: any) => {
+            toast.error(err.message || 'Failed to submit leave request');
+        }
+    });
 
     // Stats
     const stats = {
-        pending: myLeaves.filter(r => r.status === 'pending').length,
-        approved: myLeaves.filter(r => r.status === 'approved').length,
-        rejected: myLeaves.filter(r => r.status === 'rejected').length,
+        pending: myLeaves.filter((r: LeaveRequest) => r.status === 'PENDING').length,
+        approved: myLeaves.filter((r: LeaveRequest) => r.status === 'APPROVED').length,
+        rejected: myLeaves.filter((r: LeaveRequest) => r.status === 'REJECTED').length,
         totalDays: myLeaves
-            .filter(r => r.status === 'approved')
-            .reduce((acc, r) => acc + differenceInDays(parseISO(r.endDate), parseISO(r.startDate)) + 1, 0),
+            .filter((r: LeaveRequest) => r.status === 'APPROVED')
+            .reduce((acc: number, r: LeaveRequest) => acc + differenceInDays(parseISO(r.end_date), parseISO(r.start_date)) + 1, 0),
     };
 
     const handleSubmit = () => {
@@ -39,9 +62,7 @@ export const EmployeeLeave: React.FC = () => {
             toast.error('Please fill in all fields');
             return;
         }
-        setIsApplyModalOpen(false);
-        toast.success('Leave request submitted successfully!');
-        setFormData({ type: 'paid', startDate: '', endDate: '', reason: '' });
+        createMutation.mutate(formData);
     };
 
     return (
@@ -96,7 +117,11 @@ export const EmployeeLeave: React.FC = () => {
                 >
                     <h3 className="font-semibold text-gray-900 mb-4">My Leave Requests</h3>
 
-                    {myLeaves.length === 0 ? (
+                    {isLoading ? (
+                        <div className="flex justify-center p-8">
+                            <Loader2 className="w-6 h-6 animate-spin text-primary-500" />
+                        </div>
+                    ) : myLeaves.length === 0 ? (
                         <EmptyState
                             title="No Leave Requests"
                             description="You haven't applied for any leaves yet."
@@ -107,7 +132,7 @@ export const EmployeeLeave: React.FC = () => {
                         />
                     ) : (
                         <div className="space-y-4">
-                            {myLeaves.map((leave, index) => (
+                            {myLeaves.map((leave: LeaveRequest, index: number) => (
                                 <motion.div
                                     key={leave.id}
                                     initial={{ opacity: 0, x: -20 }}
@@ -117,28 +142,28 @@ export const EmployeeLeave: React.FC = () => {
                                 >
                                     <div className="flex-1">
                                         <div className="flex items-center gap-2 mb-2">
-                                            <StatusBadge variant={getLeaveTypeVariant(leave.type)}>
+                                            <StatusBadge variant={getLeaveTypeVariant(leave.leave_type.toLowerCase())}>
                                                 {/* @ts-ignore - simple text transform */}
-                                                {leave.type.charAt(0).toUpperCase() + leave.type.slice(1)} Leave
+                                                {leave.leave_type.charAt(0).toUpperCase() + leave.leave_type.slice(1).toLowerCase()} Leave
                                             </StatusBadge>
-                                            <StatusBadge variant={getLeaveStatusVariant(leave.status)}>
+                                            <StatusBadge variant={getLeaveStatusVariant(leave.status.toLowerCase())}>
                                                 {/* @ts-ignore - simple text transform */}
-                                                {leave.status.charAt(0).toUpperCase() + leave.status.slice(1)}
+                                                {leave.status.charAt(0).toUpperCase() + leave.status.slice(1).toLowerCase()}
                                             </StatusBadge>
                                         </div>
                                         <p className="text-sm text-gray-900 font-medium mb-1">{leave.reason}</p>
                                         <div className="flex items-center gap-4 text-sm text-gray-500">
                                             <span className="flex items-center gap-1">
                                                 <Calendar className="w-4 h-4" />
-                                                {format(parseISO(leave.startDate), 'MMM d')} - {format(parseISO(leave.endDate), 'MMM d, yyyy')}
+                                                {format(parseISO(leave.start_date), 'MMM d')} - {format(parseISO(leave.end_date), 'MMM d, yyyy')}
                                             </span>
                                             <span>
-                                                {differenceInDays(parseISO(leave.endDate), parseISO(leave.startDate)) + 1} days
+                                                {differenceInDays(parseISO(leave.end_date), parseISO(leave.start_date)) + 1} days
                                             </span>
                                         </div>
                                     </div>
                                     <div className="text-sm text-gray-400">
-                                        Applied: {format(parseISO(leave.appliedOn), 'MMM d, yyyy')}
+                                        Applied: {format(parseISO(leave.applied_at), 'MMM d, yyyy')}
                                     </div>
                                 </motion.div>
                             ))}
@@ -218,8 +243,13 @@ export const EmployeeLeave: React.FC = () => {
                         <Button
                             className="flex-1 bg-primary-600 hover:bg-primary-700"
                             onClick={handleSubmit}
+                            disabled={createMutation.isPending}
                         >
-                            <Send className="w-4 h-4 mr-2" />
+                            {createMutation.isPending ? (
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            ) : (
+                                <Send className="w-4 h-4 mr-2" />
+                            )}
                             Submit Request
                         </Button>
                     </div>
