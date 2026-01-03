@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
     Camera,
@@ -10,28 +10,44 @@ import {
     Calendar,
     Edit2,
     Save,
-    X
+    X,
+    Loader2
 } from 'lucide-react';
 import { useAuth } from '@/features/auth/hooks/useAuth';
-import { employees } from '@/lib/mockData';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/Modal';
 import { PageTransition } from '@/components/layout/PageTransition';
 import { toast } from 'sonner';
+import { useQuery } from '@tanstack/react-query';
+import { getEmployeeByUserId } from '../employees/api';
+import { SalaryCard } from '../salary/components/SalaryCard';
 
 export const EmployeeProfile: React.FC = () => {
     const { user } = useAuth();
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [previewAvatar, setPreviewAvatar] = useState<string | null>(null);
 
-    // Use user.id if available and match, otherwise fallback to mock '2'
-    const employee = employees.find(e => e.id === (user as any)?.id) || employees.find(e => e.id === '2') || employees[0];
+    const { data: employeeData, isLoading } = useQuery({
+        queryKey: ['employee-profile', user?.id],
+        queryFn: () => getEmployeeByUserId(user?.id || ''),
+        enabled: !!user?.id,
+    });
 
     const [formData, setFormData] = useState({
-        phone: employee.phone,
-        address: employee.address,
+        phone: '',
+        address: '',
     });
+
+    // Initialize form data when employee data is loaded
+    useEffect(() => {
+        if (employeeData) {
+            setFormData({
+                phone: employeeData.phone || '',
+                address: employeeData.address || '',
+            });
+        }
+    }, [employeeData]);
 
     const handleSave = () => {
         setIsEditModalOpen(false);
@@ -49,13 +65,28 @@ export const EmployeeProfile: React.FC = () => {
         }
     };
 
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center min-h-[400px]">
+                <Loader2 className="w-8 h-8 animate-spin text-primary-600" />
+            </div>
+        );
+    }
+
+    if (!employeeData) {
+        return <div>Employee profile not found.</div>;
+    }
+
+    const employeeName = `${employeeData.first_name} ${employeeData.last_name}`;
+    const salary = Array.isArray(employeeData.salaries) ? employeeData.salaries[0] : employeeData.salaries;
+
     const infoItems = [
-        { icon: Mail, label: 'Email', value: employee.email },
-        { icon: Phone, label: 'Phone', value: formData.phone },
-        { icon: MapPin, label: 'Address', value: formData.address },
-        { icon: Building2, label: 'Department', value: employee.department },
-        { icon: Briefcase, label: 'Position', value: employee.position },
-        { icon: Calendar, label: 'Join Date', value: new Date(employee.joinDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) },
+        { icon: Mail, label: 'Email', value: (employeeData as { user?: { email: string } }).user?.email || 'N/A' },
+        { icon: Phone, label: 'Phone', value: employeeData.phone || 'N/A' },
+        { icon: MapPin, label: 'Address', value: employeeData.address || 'N/A' },
+        { icon: Building2, label: 'Department', value: employeeData.department },
+        { icon: Briefcase, label: 'Position', value: employeeData.designation },
+        { icon: Calendar, label: 'Join Date', value: new Date(employeeData.date_of_joining).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) },
     ];
 
     return (
@@ -78,8 +109,8 @@ export const EmployeeProfile: React.FC = () => {
                             {/* Avatar */}
                             <div className="relative">
                                 <img
-                                    src={previewAvatar || employee.avatar}
-                                    alt={employee.name}
+                                    src={previewAvatar || employeeData.profile_image}
+                                    alt={employeeName}
                                     className="w-32 h-32 rounded-2xl object-cover border-4 border-white shadow-lg bg-white"
                                 />
                                 <label className="absolute bottom-2 right-2 w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center cursor-pointer hover:bg-primary-700 transition-colors shadow-sm">
@@ -95,8 +126,8 @@ export const EmployeeProfile: React.FC = () => {
 
                             {/* Name & Role */}
                             <div className="flex-1 md:pb-2 pt-2 md:pt-0">
-                                <h1 className="text-2xl font-bold text-gray-900">{employee.name}</h1>
-                                <p className="text-gray-500">{employee.position} • {employee.department}</p>
+                                <h1 className="text-2xl font-bold text-gray-900">{employeeName}</h1>
+                                <p className="text-gray-500">{employeeData.designation} • {employeeData.department}</p>
                             </div>
 
                             {/* Edit Button */}
@@ -134,32 +165,16 @@ export const EmployeeProfile: React.FC = () => {
                     ))}
                 </div>
 
-                {/* Salary Info */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.4 }}
-                    className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm"
-                >
-                    <h3 className="font-semibold text-gray-900 mb-4">Salary Information</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                            <p className="text-sm text-gray-500 mb-1">Base Salary</p>
-                            <p className="text-2xl font-bold text-gray-900">${employee.salary.toLocaleString()}</p>
-                            <p className="text-xs text-gray-400">per year</p>
-                        </div>
-                        <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                            <p className="text-sm text-gray-500 mb-1">Monthly Gross</p>
-                            <p className="text-2xl font-bold text-gray-900">${(employee.salary / 12).toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
-                            <p className="text-xs text-gray-400">before deductions</p>
-                        </div>
-                        <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100">
-                            <p className="text-sm text-emerald-600 mb-1">Net Monthly</p>
-                            <p className="text-2xl font-bold text-emerald-700">${((employee.salary / 12) * 0.75).toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
-                            <p className="text-xs text-emerald-600">after deductions</p>
-                        </div>
-                    </div>
-                </motion.div>
+                {/* Salary Overview */}
+                {salary && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.4 }}
+                    >
+                        <SalaryCard salary={salary} />
+                    </motion.div>
+                )}
             </div>
 
             {/* Edit Profile Modal */}

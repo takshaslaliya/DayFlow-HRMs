@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { DollarSign, Edit2, Save, X, TrendingUp } from 'lucide-react';
-import { employees, monthlyPayrollData } from '@/lib/mockData';
+import { DollarSign, Edit2, TrendingUp, Loader2 } from 'lucide-react';
+import { monthlyPayrollData } from '@/lib/mockData';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/Modal';
 import { PageTransition } from '@/components/layout/PageTransition';
 import {
@@ -15,45 +14,38 @@ import {
     Tooltip,
     ResponsiveContainer
 } from 'recharts';
-import { toast } from 'sonner';
-
-interface EditableSalary {
-    id: string;
-    name: string;
-    currentSalary: number;
-    newSalary: number;
-}
+import { useQuery } from '@tanstack/react-query';
+import { getPayrollData } from '../salary/api';
+import { SalaryForm } from '../salary/components/SalaryForm';
+import { SalaryComponents } from '../salary/components/SalaryComponents';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export const AdminPayroll: React.FC = () => {
-    const [salaries, setSalaries] = useState(
-        employees.map(e => ({ id: e.id, name: e.name, salary: e.salary, department: e.department, position: e.position }))
-    );
-    const [editingEmployee, setEditingEmployee] = useState<EditableSalary | null>(null);
+    const [selectedEmployee, setSelectedEmployee] = useState<{ id: string, name: string, salary: any } | null>(null);
 
-    const totalMonthly = salaries.reduce((acc, e) => acc + e.salary / 12, 0);
-    const totalAnnual = salaries.reduce((acc, e) => acc + e.salary, 0);
+    const { data: payrollData, isLoading } = useQuery({
+        queryKey: ['payroll-data'],
+        queryFn: getPayrollData,
+    });
 
-    const handleEditClick = (emp: typeof salaries[0]) => {
-        setEditingEmployee({
-            id: emp.id,
-            name: emp.name,
-            currentSalary: emp.salary,
-            newSalary: emp.salary,
-        });
-    };
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center min-h-[400px]">
+                <Loader2 className="w-8 h-8 animate-spin text-primary-600" />
+            </div>
+        );
+    }
 
-    const handleSave = () => {
-        if (!editingEmployee) return;
+    const processedSalaries = payrollData?.map(emp => ({
+        id: emp.id,
+        name: `${emp.first_name} ${emp.last_name}`,
+        department: emp.department,
+        designation: emp.designation,
+        salary: Array.isArray(emp.salaries) ? emp.salaries[0] : emp.salaries
+    })) || [];
 
-        setSalaries(prev => prev.map(s =>
-            s.id === editingEmployee.id
-                ? { ...s, salary: editingEmployee.newSalary }
-                : s
-        ));
-
-        toast.success(`Salary updated for ${editingEmployee.name}`);
-        setEditingEmployee(null);
-    };
+    const totalMonthly = processedSalaries.reduce((acc, e) => acc + (e.salary?.monthly_ctc || 0), 0);
+    const totalAnnual = processedSalaries.reduce((acc, e) => acc + (e.salary?.yearly_ctc || 0), 0);
 
     return (
         <PageTransition>
@@ -78,7 +70,7 @@ export const AdminPayroll: React.FC = () => {
                             <div>
                                 <p className="text-sm text-gray-500">Monthly Payroll</p>
                                 <p className="text-2xl font-bold text-gray-900">
-                                    ${totalMonthly.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                    ₹{totalMonthly.toLocaleString()}
                                 </p>
                             </div>
                         </div>
@@ -97,7 +89,7 @@ export const AdminPayroll: React.FC = () => {
                             <div>
                                 <p className="text-sm text-gray-500">Annual Payroll</p>
                                 <p className="text-2xl font-bold text-gray-900">
-                                    ${totalAnnual.toLocaleString()}
+                                    ₹{totalAnnual.toLocaleString()}
                                 </p>
                             </div>
                         </div>
@@ -116,7 +108,7 @@ export const AdminPayroll: React.FC = () => {
                             <div>
                                 <p className="text-sm text-gray-500">Average Salary</p>
                                 <p className="text-2xl font-bold text-gray-900">
-                                    ${(totalAnnual / salaries.length).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                    ₹{processedSalaries.length ? (totalAnnual / processedSalaries.length).toLocaleString(undefined, { maximumFractionDigits: 0 }) : '0'}
                                 </p>
                             </div>
                         </div>
@@ -144,7 +136,7 @@ export const AdminPayroll: React.FC = () => {
                                 <XAxis dataKey="month" stroke="#9ca3af" />
                                 <YAxis
                                     stroke="#9ca3af"
-                                    tickFormatter={(value) => `$${(value / 1000)}k`}
+                                    tickFormatter={(value) => `₹${(value / 1000)}k`}
                                 />
                                 <Tooltip
                                     contentStyle={{
@@ -153,7 +145,7 @@ export const AdminPayroll: React.FC = () => {
                                         borderRadius: '12px',
                                         boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
                                     }}
-                                    formatter={(value: any) => [`$${(value || 0).toLocaleString()}`, 'Total Payroll']}
+                                    formatter={(value: number | undefined) => [`₹${(value || 0).toLocaleString()}`, 'Total Payroll']}
                                 />
                                 <Area
                                     type="monotone"
@@ -182,13 +174,13 @@ export const AdminPayroll: React.FC = () => {
                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Employee</th>
                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Department</th>
                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Position</th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Annual Salary</th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Annual CTC</th>
                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Monthly</th>
                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
-                                {salaries.map((emp, index) => (
+                                {processedSalaries.map((emp, index) => (
                                     <motion.tr
                                         key={emp.id}
                                         initial={{ opacity: 0, x: -20 }}
@@ -198,22 +190,22 @@ export const AdminPayroll: React.FC = () => {
                                     >
                                         <td className="px-6 py-4 font-medium text-gray-900">{emp.name}</td>
                                         <td className="px-6 py-4 text-gray-500">{emp.department}</td>
-                                        <td className="px-6 py-4 text-gray-500">{emp.position}</td>
+                                        <td className="px-6 py-4 text-gray-500">{emp.designation}</td>
                                         <td className="px-6 py-4 font-semibold text-gray-900">
-                                            ${emp.salary.toLocaleString()}
+                                            ₹{emp.salary?.yearly_ctc?.toLocaleString() || '0'}
                                         </td>
                                         <td className="px-6 py-4 text-gray-500">
-                                            ${(emp.salary / 12).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                            ₹{emp.salary?.monthly_ctc?.toLocaleString() || '0'}
                                         </td>
                                         <td className="px-6 py-4">
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
-                                                onClick={() => handleEditClick(emp)}
+                                                onClick={() => setSelectedEmployee(emp)}
                                                 className="hover:bg-primary-50 hover:text-primary-600"
                                             >
                                                 <Edit2 className="w-4 h-4 mr-2" />
-                                                Edit
+                                                Manage
                                             </Button>
                                         </td>
                                     </motion.tr>
@@ -224,70 +216,34 @@ export const AdminPayroll: React.FC = () => {
                 </motion.div>
             </div>
 
-            {/* Edit Salary Modal */}
+            {/* Manage Payroll Modal */}
             <Modal
-                isOpen={!!editingEmployee}
-                onClose={() => setEditingEmployee(null)}
-                title="Edit Salary"
-                size="sm"
+                isOpen={!!selectedEmployee}
+                onClose={() => setSelectedEmployee(null)}
+                title={`Manage Payroll: ${selectedEmployee?.name}`}
+                size="lg"
             >
-                {editingEmployee && (
-                    <div className="space-y-4">
-                        <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                            <p className="font-medium text-gray-900">{editingEmployee.name}</p>
-                            <p className="text-sm text-gray-500 mt-1">
-                                Current Salary: ${editingEmployee.currentSalary.toLocaleString()}/year
-                            </p>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                New Annual Salary ($)
-                            </label>
-                            <Input
-                                type="number"
-                                value={editingEmployee.newSalary}
-                                onChange={(e) => setEditingEmployee({
-                                    ...editingEmployee,
-                                    newSalary: parseInt(e.target.value) || 0
-                                })}
+                {selectedEmployee && (
+                    <Tabs defaultValue="settings" className="w-full">
+                        <TabsList className="grid w-full grid-cols-2 mb-6">
+                            <TabsTrigger value="settings">Salary Settings</TabsTrigger>
+                            <TabsTrigger value="components" disabled={!selectedEmployee.salary}>
+                                Components
+                            </TabsTrigger>
+                        </TabsList>
+                        <TabsContent value="settings">
+                            <SalaryForm
+                                employeeId={selectedEmployee.id}
+                                initialData={selectedEmployee.salary}
+                                onSuccess={() => { }}
                             />
-                            <p className="text-xs text-gray-400 mt-2">
-                                Monthly: ${(editingEmployee.newSalary / 12).toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                            </p>
-                        </div>
-
-                        {editingEmployee.newSalary !== editingEmployee.currentSalary && (
-                            <div className={`p-3 rounded-xl ${editingEmployee.newSalary > editingEmployee.currentSalary
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                                : 'bg-red-50 text-red-700 border border-red-100'
-                                }`}>
-                                <p className="text-sm font-medium">
-                                    {editingEmployee.newSalary > editingEmployee.currentSalary ? '↑' : '↓'}
-                                    {' '}${Math.abs(editingEmployee.newSalary - editingEmployee.currentSalary).toLocaleString()}
-                                    {' '}({((editingEmployee.newSalary - editingEmployee.currentSalary) / editingEmployee.currentSalary * 100).toFixed(1)}%)
-                                </p>
-                            </div>
-                        )}
-
-                        <div className="flex gap-3 pt-2">
-                            <Button
-                                variant="outline"
-                                className="flex-1"
-                                onClick={() => setEditingEmployee(null)}
-                            >
-                                <X className="w-4 h-4 mr-2" />
-                                Cancel
-                            </Button>
-                            <Button
-                                className="flex-1 bg-primary-600 hover:bg-primary-700 text-white"
-                                onClick={handleSave}
-                            >
-                                <Save className="w-4 h-4 mr-2" />
-                                Save Changes
-                            </Button>
-                        </div>
-                    </div>
+                        </TabsContent>
+                        <TabsContent value="components">
+                            {selectedEmployee.salary && (
+                                <SalaryComponents salaryId={selectedEmployee.salary.id} />
+                            )}
+                        </TabsContent>
+                    </Tabs>
                 )}
             </Modal>
         </PageTransition>

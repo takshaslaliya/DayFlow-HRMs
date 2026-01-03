@@ -21,8 +21,33 @@ export const getEmployees = async () => {
     return data;
 };
 
+export const getEmployeeByUserId = async (userId: string) => {
+    const { data, error } = await supabase
+        .from('employees')
+        .select(`
+            *,
+            user:users (
+                email,
+                is_active
+            ),
+            salaries (
+                id,
+                base_wage,
+                monthly_ctc,
+                yearly_ctc,
+                wage_type,
+                working_days
+            )
+        `)
+        .eq('user_id', userId)
+        .single();
+
+    if (error && error.code !== 'PGRST116') throw error;
+    return data;
+};
+
 // Create a new employee (and user)
-export const createEmployee = async (employeeData: any) => {
+export const createEmployee = async (employeeData: Record<string, any>) => {
     const { name, email, position, department, phone, address, salary, date_of_joining } = employeeData;
 
     // 1. Create User
