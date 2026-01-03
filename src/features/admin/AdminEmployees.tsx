@@ -14,7 +14,8 @@ import {
     X,
     Plus,
     Loader2,
-    Trash2
+    Trash2,
+    Pencil
 } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/button';
@@ -23,7 +24,7 @@ import { PageTransition } from '@/components/layout/PageTransition';
 import { format } from 'date-fns';
 import { Modal } from '@/components/ui/Modal';
 import { toast } from 'sonner';
-import { getEmployees, createEmployee, deleteEmployee } from '@/features/employees/api';
+import { getEmployees, createEmployee, deleteEmployee, updateEmployee } from '@/features/employees/api';
 import type { Employee } from '@/types';
 
 export const AdminEmployees: React.FC = () => {
@@ -32,6 +33,7 @@ export const AdminEmployees: React.FC = () => {
     const [departmentFilter, setDepartmentFilter] = useState<string>('all');
     const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
 
     // Form State
     const [newEmployee, setNewEmployee] = useState({
@@ -58,21 +60,41 @@ export const AdminEmployees: React.FC = () => {
             queryClient.invalidateQueries({ queryKey: ['employees'] });
             toast.success('Employee added successfully');
             setIsAddModalOpen(false);
-            setNewEmployee({
-                name: '',
-                email: '',
-                position: '',
-                department: '',
-                phone: '',
-                address: '',
-                salary: '',
-                joinDate: format(new Date(), 'yyyy-MM-dd')
-            });
+            resetForm();
         },
         onError: (err: any) => {
             toast.error(err.message || 'Failed to add employee');
         }
     });
+
+    // Update Employee Mutation
+    const updateMutation = useMutation({
+        mutationFn: ({ id, data }: { id: string; data: any }) => updateEmployee(id, data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['employees'] });
+            toast.success('Employee updated successfully');
+            setIsAddModalOpen(false);
+            setEditingEmployee(null);
+            resetForm();
+        },
+        onError: (err: any) => {
+            toast.error(err.message || 'Failed to update employee');
+        }
+    });
+
+    const resetForm = () => {
+        setNewEmployee({
+            name: '',
+            email: '',
+            position: '',
+            department: '',
+            phone: '',
+            address: '',
+            salary: '',
+            joinDate: format(new Date(), 'yyyy-MM-dd')
+        });
+        setEditingEmployee(null);
+    };
 
     // Delete Employee Mutation
     const deleteMutation = useMutation({
@@ -97,22 +119,51 @@ export const AdminEmployees: React.FC = () => {
         return matchesSearch && matchesDepartment;
     });
 
-    const handleAddEmployee = () => {
+    const handleSaveEmployee = () => {
         if (!newEmployee.name || !newEmployee.email || !newEmployee.position) {
             toast.error('Please fill in all required fields');
             return;
         }
 
-        createMutation.mutate({
+        const employeeData = {
             name: newEmployee.name,
-            email: newEmployee.email,
+            email: newEmployee.email, // Email might not be updatable for existing users easily without auth changes, but passing it for now
             position: newEmployee.position,
             department: newEmployee.department,
             phone: newEmployee.phone,
             address: newEmployee.address,
             salary: newEmployee.salary,
             date_of_joining: newEmployee.joinDate
+        };
+
+        if (editingEmployee) {
+            updateMutation.mutate({
+                id: editingEmployee.id,
+                data: employeeData
+            });
+        } else {
+            createMutation.mutate(employeeData);
+        }
+    };
+
+    const handleEditClick = (employee: Employee) => {
+        setEditingEmployee(employee);
+        setNewEmployee({
+            name: `${employee.first_name} ${employee.last_name}`,
+            email: employee.user?.email || '',
+            position: employee.designation || '',
+            department: employee.department || '',
+            phone: employee.phone || '',
+            address: employee.address || '',
+            salary: '', // Salary hidden/not available in list object easily without separate fetch or keeping it in employee object
+            joinDate: employee.date_of_joining ? format(new Date(employee.date_of_joining), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')
         });
+        setIsAddModalOpen(true);
+    };
+
+    const handleOpenAddModal = () => {
+        resetForm();
+        setIsAddModalOpen(true);
     };
 
     if (error) {
@@ -134,7 +185,7 @@ export const AdminEmployees: React.FC = () => {
                     </div>
                     <div className="flex items-center gap-3">
                         <Button
-                            onClick={() => setIsAddModalOpen(true)}
+                            onClick={handleOpenAddModal}
                             className="bg-primary-600 hover:bg-primary-700 text-white"
                         >
                             <Plus className="w-4 h-4 mr-2" />
@@ -243,6 +294,15 @@ export const AdminEmployees: React.FC = () => {
                                                     <Button
                                                         variant="ghost"
                                                         size="sm"
+                                                        onClick={() => handleEditClick(employee)}
+                                                        className="hover:bg-blue-50 hover:text-blue-600"
+                                                    >
+                                                        <Pencil className="w-4 h-4 mr-2" />
+                                                        Edit
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
                                                         onClick={() => {
                                                             if (confirm('Are you sure you want to delete this employee? This action cannot be undone.')) {
                                                                 deleteMutation.mutate({
@@ -271,7 +331,7 @@ export const AdminEmployees: React.FC = () => {
             <Modal
                 isOpen={isAddModalOpen}
                 onClose={() => setIsAddModalOpen(false)}
-                title="Add New Employee"
+                title={editingEmployee ? "Edit Employee" : "Add New Employee"}
             >
                 <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
@@ -290,6 +350,7 @@ export const AdminEmployees: React.FC = () => {
                                 placeholder="john@example.com"
                                 value={newEmployee.email}
                                 onChange={(e) => setNewEmployee({ ...newEmployee, email: e.target.value })}
+                                disabled={!!editingEmployee} // Disable email edit for now as it's linked to login
                             />
                         </div>
                     </div>
@@ -347,11 +408,11 @@ export const AdminEmployees: React.FC = () => {
                             Cancel
                         </Button>
                         <Button
-                            onClick={handleAddEmployee}
-                            disabled={createMutation.isPending}
+                            onClick={handleSaveEmployee}
+                            disabled={createMutation.isPending || updateMutation.isPending}
                             className="bg-primary-600 hover:bg-primary-700 text-white"
                         >
-                            {createMutation.isPending ? 'Adding...' : 'Add Employee'}
+                            {createMutation.isPending || updateMutation.isPending ? 'Saving...' : (editingEmployee ? 'Update Employee' : 'Add Employee')}
                         </Button>
                     </div>
                 </div>

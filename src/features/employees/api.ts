@@ -88,6 +88,70 @@ export const createEmployee = async (employeeData: any) => {
     return employee;
 };
 
+// Update an employee
+export const updateEmployee = async (employeeId: string, employeeData: any) => {
+    const { name, email, position, department, phone, address, salary, date_of_joining } = employeeData;
+
+    const [firstName, ...lastNameParts] = name.split(' ');
+    const lastName = lastNameParts.join(' ') || '';
+
+    // 1. Update Employee Details
+    const { data: employee, error: empError } = await supabase
+        .from('employees')
+        .update({
+            first_name: firstName,
+            last_name: lastName,
+            designation: position,
+            department: department,
+            phone: phone,
+            address: address,
+            date_of_joining: date_of_joining,
+            // optional: update profile image if name changes? 
+            // profile_image: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`
+        })
+        .eq('id', employeeId)
+        .select()
+        .single();
+
+    if (empError) {
+        throw new Error(`Failed to update employee: ${empError.message}`);
+    }
+
+    // 2. Update Salary (if provided) - Simplified logic: update if exists, insert if not? 
+    // For now assuming 1:1 relationship and just upserting or ignoring if complex.
+    // Let's stick to updating the salary record if it exists for this employee.
+    if (salary) {
+        // Check if salary record exists
+        const { data: salaryData } = await supabase
+            .from('salaries')
+            .select('id')
+            .eq('employee_id', employeeId)
+            .single();
+
+        if (salaryData) {
+            await supabase.from('salaries').update({
+                base_wage: parseFloat(salary),
+                monthly_ctc: parseFloat(salary),
+                yearly_ctc: parseFloat(salary) * 12
+            }).eq('employee_id', employeeId);
+        } else {
+            await supabase.from('salaries').insert({
+                employee_id: employeeId,
+                wage_type: 'FIXED',
+                base_wage: parseFloat(salary),
+                monthly_ctc: parseFloat(salary),
+                yearly_ctc: parseFloat(salary) * 12
+            });
+        }
+    }
+
+    // 3. Update User Email (Optional)
+    // Changing email is sensitive as it changes login ID too in our logic. 
+    // For now, let's assume specific user update is separate or ignored here.
+
+    return employee;
+};
+
 // Delete an employee and their associated user account
 export const deleteEmployee = async (employeeId: string, userId?: string) => {
     // 1. Delete Employee
