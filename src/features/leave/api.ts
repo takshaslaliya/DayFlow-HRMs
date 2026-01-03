@@ -31,22 +31,36 @@ export const getMyLeaves = async (userId: string) => {
 
 // Fetch all leaves (for admin) joined with employee data
 export const getAllLeaves = async () => {
-    const { data, error } = await supabase
+    const { data: leaveRequests, error } = await supabase
         .from('leave_requests')
-        .select(`
-            *,
-            employee:employees (
-                first_name,
-                last_name,
-                profile_image,
-                department,
-                designation
-            )
-        `)
+        .select('*')
         .order('applied_at', { ascending: false });
 
-    if (error) throw new Error(error.message);
-    return data;
+    if (error) {
+        console.error('Error fetching leaves:', error);
+        throw new Error(error.message);
+    }
+
+    // Fetch employee details separately for each leave request
+    if (leaveRequests && leaveRequests.length > 0) {
+        const leavesWithEmployees = await Promise.all(
+            leaveRequests.map(async (leave) => {
+                const { data: employee } = await supabase
+                    .from('employees')
+                    .select('first_name, last_name, profile_image, department, designation')
+                    .eq('id', leave.employee_id)
+                    .single();
+
+                return {
+                    ...leave,
+                    employee: employee || null
+                };
+            })
+        );
+        return leavesWithEmployees;
+    }
+
+    return leaveRequests;
 };
 
 // Create a new leave request

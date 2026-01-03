@@ -110,20 +110,34 @@ export const getMyAttendance = async (userId: string) => {
 
 // Fetch all attendance (for admin)
 export const getAllAttendance = async () => {
-    const { data, error } = await supabase
+    const { data: attendanceRecords, error } = await supabase
         .from('attendance')
-        .select(`
-            *,
-            employee:employees (
-                first_name,
-                last_name,
-                profile_image,
-                department,
-                designation
-            )
-        `)
+        .select('*')
         .order('date', { ascending: false });
 
-    if (error) throw new Error(error.message);
-    return data as AttendanceRecord[];
+    if (error) {
+        console.error('Error fetching attendance:', error);
+        throw new Error(error.message);
+    }
+
+    // Fetch employee details separately for each attendance record
+    if (attendanceRecords && attendanceRecords.length > 0) {
+        const attendanceWithEmployees = await Promise.all(
+            attendanceRecords.map(async (record) => {
+                const { data: employee } = await supabase
+                    .from('employees')
+                    .select('first_name, last_name, profile_image, department, designation')
+                    .eq('id', record.employee_id)
+                    .single();
+
+                return {
+                    ...record,
+                    employee: employee || null
+                };
+            })
+        );
+        return attendanceWithEmployees as AttendanceRecord[];
+    }
+
+    return attendanceRecords as AttendanceRecord[];
 };

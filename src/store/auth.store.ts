@@ -75,12 +75,19 @@ export const useAuthStore = create<AuthState>((set) => ({
                 throw new Error('Account is disabled');
             }
 
+            // 2.5 Fetch Employee Details
+            const { data: employeeData } = await supabase
+                .from('employees')
+                .select('first_name, last_name, profile_image')
+                .eq('user_id', user.id)
+                .maybeSingle();
+
             // 3. Set User State
             const userObj = {
                 id: user.id,
                 email: user.email,
                 role: user.role.toLowerCase(),
-                metadata: { ...user }
+                metadata: { ...user, employee: employeeData }
             };
 
             set({ user: userObj });

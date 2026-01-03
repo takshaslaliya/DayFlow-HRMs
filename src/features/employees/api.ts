@@ -4,47 +4,66 @@ import { supabase } from '@/lib/supabase';
 
 // Fetch all employees with their associated user details
 export const getEmployees = async () => {
-    const { data, error } = await supabase
+    const { data: employees, error } = await supabase
         .from('employees')
-        .select(`
-            *,
-            user:users (
-                email,
-                login_id,
-                is_active
-            )
-        `);
+        .select('*')
+        .order('created_at', { ascending: false });
 
     if (error) {
+        console.error('Error fetching employees:', error);
         throw new Error(error.message);
     }
 
-    return data;
+    // Fetch user details separately for each employee
+    if (employees && employees.length > 0) {
+        const employeesWithUsers = await Promise.all(
+            employees.map(async (emp) => {
+                const { data: user } = await supabase
+                    .from('users')
+                    .select('email, login_id, is_active')
+                    .eq('id', emp.user_id)
+                    .single();
+
+                return {
+                    ...emp,
+                    user: user || null
+                };
+            })
+        );
+        return employeesWithUsers;
+    }
+
+    return employees;
 };
 
 export const getEmployeeByUserId = async (userId: string) => {
-    const { data, error } = await supabase
+    const { data: employee, error } = await supabase
         .from('employees')
-        .select(`
-            *,
-            user:users (
-                email,
-                is_active
-            ),
-            salaries (
-                id,
-                base_wage,
-                monthly_ctc,
-                yearly_ctc,
-                wage_type,
-                working_days
-            )
-        `)
+        .select('*')
         .eq('user_id', userId)
         .single();
 
     if (error && error.code !== 'PGRST116') throw error;
-    return data;
+    if (!employee) return null;
+
+    // Fetch user details separately
+    const { data: user } = await supabase
+        .from('users')
+        .select('email, is_active')
+        .eq('id', userId)
+        .single();
+
+    // Fetch salary details separately
+    const { data: salaries } = await supabase
+        .from('salaries')
+        .select('id, base_wage, monthly_ctc, yearly_ctc, wage_type, working_days')
+        .eq('employee_id', employee.id);
+
+    return {
+        ...employee,
+        user: user || null,
+        salaries: salaries || []
+    };
 };
 
 // Helper: Generate Login ID

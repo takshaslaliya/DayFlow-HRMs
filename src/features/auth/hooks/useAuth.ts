@@ -1,7 +1,12 @@
+import { useAuthStore } from '@/store/auth.store';
+
 export function useAuth() {
+    const store = useAuthStore();
     return {
-        user: { id: '2', name: 'Krutarth Patel', role: 'admin', email: 'krutarth@example.com' },
-        login: () => { },
-        logout: () => { }
+        user: store.user,
+        login: store.login,
+        logout: store.logout,
+        isAuthenticated: !!store.user,
+        isLoading: store.isLoading
     };
 }

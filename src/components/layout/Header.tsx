@@ -1,18 +1,27 @@
 import { useState } from 'react';
-import { useLocation, Link } from 'react-router-dom';
+import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { Bell, User, Settings, LogOut, ChevronDown } from 'lucide-react';
-
-
-import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/auth.store';
 
 export function Header() {
     const navigate = useNavigate();
-    const logout = useAuthStore((state) => state.logout);
+    const { user, logout } = useAuthStore();
     const location = useLocation();
 
     const pathnames = location.pathname.split('/').filter((x) => x);
     const [isProfileOpen, setIsProfileOpen] = useState(false);
+
+    // Get display values
+    const employee = user?.metadata?.employee;
+    const fullName = employee ? `${employee.first_name} ${employee.last_name}` : null;
+
+    const displayName = fullName || user?.metadata?.login_id || user?.email || 'User';
+    const displayRole = user?.role?.toUpperCase() || 'GUEST';
+    const displayEmail = user?.email || '';
+
+    const initials = employee
+        ? `${employee.first_name[0]}${employee.last_name[0]}`.toUpperCase()
+        : displayName.substring(0, 2).toUpperCase();
 
     // Capitalize first letter
     const Breadcrumb = () => (
@@ -56,11 +65,11 @@ export function Header() {
                         onBlur={() => setTimeout(() => setIsProfileOpen(false), 200)}
                     >
                         <div className="h-8 w-8 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-bold">
-                            AD
+                            {initials}
                         </div>
                         <div className="hidden md:block text-left">
-                            <p className="text-sm font-medium text-gray-700 leading-none">Admin User</p>
-                            <p className="text-xs text-gray-500">Administrator</p>
+                            <p className="text-sm font-medium text-gray-700 leading-none">{displayName}</p>
+                            <p className="text-xs text-gray-500">{displayRole}</p>
                         </div>
                         <ChevronDown size={16} className="text-gray-400" />
                     </button>
@@ -69,7 +78,7 @@ export function Header() {
                         <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 border border-gray-200 z-50 animate-in fade-in zoom-in-95 duration-100">
                             <div className="px-4 py-2 border-b border-gray-100">
                                 <p className="text-sm font-medium text-gray-900">Signed in as</p>
-                                <p className="text-sm text-gray-500 truncate">admin@company.com</p>
+                                <p className="text-sm text-gray-500 truncate">{displayEmail}</p>
                             </div>
                             <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center">
                                 <User size={16} className="mr-2" /> Profile

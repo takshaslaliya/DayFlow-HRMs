@@ -11,6 +11,7 @@ import { EmployeeProfile } from '@/features/profile/EmployeeProfile';
 import { AdminEmployees } from '@/features/admin/AdminEmployees';
 import { AdminPayroll } from '@/features/admin/AdminPayroll';
 import { AdminSignupPage } from '@/features/auth/AdminSignupPage';
+import { RoleProtectedRoute } from '@/components/common/RoleProtectedRoute';
 
 // Placeholder components for lazy loading
 // const Login = () => <div>Login Page</div>;
@@ -19,10 +20,11 @@ export function Router() {
     return (
         <BrowserRouter>
             <Routes>
+                {/* Public Routes */}
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/signup" element={<AdminSignupPage />} />
 
-                {/* Protected Routes */}
+                {/* Employee/Common Protected Routes */}
                 <Route element={<ProtectedRoute />}>
                     <Route element={<AppLayout />}>
                         <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -31,14 +33,17 @@ export function Router() {
                         <Route path="/attendance" element={<AttendancePage />} />
                         <Route path="/leave" element={<LeavePage />} />
                     </Route>
-
-                    {/* Admin Routes */}
-                    <Route element={<AdminLayout />}>
-                        <Route path="/employees" element={<AdminEmployees />} />
-                        <Route path="/salary" element={<AdminPayroll />} />
-                    </Route>
                 </Route>
 
+                {/* Admin-Only Protected Routes */}
+                <Route element={<ProtectedRoute />}>
+                    <Route element={<RoleProtectedRoute allowedRoles={['admin', 'hr']} />}>
+                        <Route element={<AdminLayout />}>
+                            <Route path="/employees" element={<AdminEmployees />} />
+                            <Route path="/salary" element={<AdminPayroll />} />
+                        </Route>
+                    </Route>
+                </Route>
             </Routes>
         </BrowserRouter>
     );
