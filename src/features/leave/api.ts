@@ -77,7 +77,7 @@ export const createLeaveRequest = async (userId: string, leaveData: {
 };
 
 // Update leave status (Admin only)
-export const updateLeaveStatus = async (id: string, status: 'APPROVED' | 'REJECTED', comment?: string) => {
+export const updateLeaveStatus = async (id: string, status: 'APPROVED' | 'REJECTED', _comment?: string) => {
     // Note: comment is not in schema yet, ignoring locally or could be stored in a separate table/field if added
     const { data, error } = await supabase
         .from('leave_requests')

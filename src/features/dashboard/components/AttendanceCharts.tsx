@@ -11,24 +11,28 @@ import {
     Cell,
     Legend
 } from 'recharts';
-
-const weeklyData = [
-    { name: 'Mon', present: 110, absent: 14 },
-    { name: 'Tue', present: 115, absent: 9 },
-    { name: 'Wed', present: 108, absent: 16 },
-    { name: 'Thu', present: 112, absent: 12 },
-    { name: 'Fri', present: 118, absent: 6 },
-    { name: 'Sat', present: 45, absent: 8 }, // Half day / fewer staff
-    { name: 'Sun', present: 10, absent: 5 },  // Overtime / shifts
-];
-
-const pieData = [
-    { name: 'Present', value: 112, color: '#22c55e' },
-    { name: 'Absent', value: 12, color: '#ef4444' },
-    { name: 'On Leave', value: 5, color: '#eab308' },
-];
+import { useDashboard } from '../hooks/useDashboard';
 
 export function AttendanceCharts() {
+    const { stats } = useDashboard();
+
+    // Use real stats if available, otherwise use empty or loading state
+    const weeklyData = stats?.weeklyStats || [
+        { name: 'Mon', present: 0, absent: 0 },
+        { name: 'Tue', present: 0, absent: 0 },
+        { name: 'Wed', present: 0, absent: 0 },
+        { name: 'Thu', present: 0, absent: 0 },
+        { name: 'Fri', present: 0, absent: 0 },
+        { name: 'Sat', present: 0, absent: 0 },
+        { name: 'Sun', present: 0, absent: 0 },
+    ];
+
+    const pieData = [
+        { name: 'Present', value: stats?.presentToday || 0, color: '#22c55e' },
+        { name: 'Absent', value: stats?.absentToday || 0, color: '#ef4444' },
+        { name: 'On Leave', value: stats?.leavesPending || 0, color: '#eab308' }, // Note: Using pending as proxy for now or add 'Approved Leave Today' to API
+    ];
+
     return (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Weekly Trend Bar Chart */}
