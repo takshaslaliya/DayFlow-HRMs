@@ -114,32 +114,6 @@ export function LoginForm() {
                     </>
                 )}
             </Button>
-
-            <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                    <span className="w-full border-t border-gray-200" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-white px-2 text-gray-400">
-                        Demo Credentials
-                    </span>
-                </div>
-            </div>
-
-            <div className="rounded-lg bg-gray-50 p-4 text-xs text-gray-500 space-y-2 border border-gray-100">
-                <div className="flex justify-between">
-                    <span>Admin:</span>
-                    <span className="font-mono text-gray-700">admin@company.com</span>
-                </div>
-                <div className="flex justify-between">
-                    <span>Employee:</span>
-                    <span className="font-mono text-gray-700">employee@company.com</span>
-                </div>
-                <div className="flex justify-between">
-                    <span>Password:</span>
-                    <span className="font-mono text-gray-700">password</span>
-                </div>
-            </div>
         </motion.form>
     );
 }
