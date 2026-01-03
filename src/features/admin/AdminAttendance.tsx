@@ -28,7 +28,7 @@ export const AdminAttendance: React.FC = () => {
                 : 'Unknown';
             const matchesSearch = employeeName.toLowerCase().includes(searchQuery.toLowerCase());
 
-            const recordDate = parseISO(r.date);
+            const recordDate = parseISO(r.attendance_date);
             const today = new Date();
 
             let start: Date;
@@ -50,7 +50,7 @@ export const AdminAttendance: React.FC = () => {
 
     // Stats
     const todayStr = format(new Date(), 'yyyy-MM-dd');
-    const todayRecords = attendanceData.filter((r: AttendanceRecord) => r.date === todayStr);
+    const todayRecords = attendanceData.filter((r: AttendanceRecord) => r.attendance_date === todayStr);
     const stats = {
         present: todayRecords.filter((r: AttendanceRecord) => r.status === 'PRESENT').length,
         late: todayRecords.filter((r: AttendanceRecord) => r.status === 'LATE').length,
@@ -182,7 +182,7 @@ export const AdminAttendance: React.FC = () => {
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-2 text-gray-500">
                                                     <Calendar className="w-4 h-4" />
-                                                    {format(parseISO(record.date), 'MMM d, yyyy')}
+                                                    {format(parseISO(record.attendance_date), 'MMM d, yyyy')}
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4">
@@ -206,7 +206,7 @@ export const AdminAttendance: React.FC = () => {
                                                 )}
                                             </td>
                                             <td className="px-6 py-4 font-medium text-gray-900">
-                                                {record.work_hours ? `${record.work_hours}h` : '—'}
+                                                {record.total_hours ? `${record.total_hours}h` : '—'}
                                             </td>
                                             <td className="px-6 py-4">
                                                 <StatusBadge variant={getAttendanceStatusVariant(record.status.toLowerCase())}>

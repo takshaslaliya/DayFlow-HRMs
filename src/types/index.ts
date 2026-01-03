@@ -53,11 +53,11 @@ export interface LeaveRequest {
 export interface AttendanceRecord {
     id: string; // uuid
     employee_id: string;
-    date: string; // YYYY-MM-DD
+    attendance_date: string; // YYYY-MM-DD
     check_in: string; // HH:mm:ss
     check_out?: string; // HH:mm:ss
     status: 'PRESENT' | 'ABSENT' | 'LATE' | 'HALF_DAY';
-    work_hours?: number;
+    total_hours?: number;
     created_at: string;
     updated_at: string;
     // Joined fields

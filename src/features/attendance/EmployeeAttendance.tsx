@@ -25,7 +25,7 @@ export const EmployeeAttendance: React.FC = () => {
     const myAttendance = attendanceData.filter((r: AttendanceRecord) => {
         // Attendance API already filters by user, just need date filter locally if desired, 
         // passing date filter to API is better but this works for small data
-        const recordDate = parseISO(r.date);
+        const recordDate = parseISO(r.attendance_date);
         const today = new Date();
         const start = filter === 'week' ? subDays(today, 7) : subDays(today, 30);
         return isWithinInterval(recordDate, { start, end: today });
@@ -37,7 +37,7 @@ export const EmployeeAttendance: React.FC = () => {
         late: myAttendance.filter((r: AttendanceRecord) => r.status === 'LATE').length,
         absent: myAttendance.filter((r: AttendanceRecord) => r.status === 'ABSENT').length,
         leave: myAttendance.filter((r: AttendanceRecord) => r.status === 'HALF_DAY').length, // Mapping HALF_DAY to "Leave" concept for now or create generic
-        totalHours: myAttendance.reduce((acc: number, r: AttendanceRecord) => acc + (r.work_hours || 0), 0).toFixed(1),
+        totalHours: myAttendance.reduce((acc: number, r: AttendanceRecord) => acc + (r.total_hours || 0), 0).toFixed(1),
     };
 
     return (
@@ -133,10 +133,10 @@ export const EmployeeAttendance: React.FC = () => {
                                             className="hover:bg-gray-50/50 transition-colors"
                                         >
                                             <td className="px-6 py-4 font-medium text-gray-900">
-                                                {format(parseISO(record.date), 'MMM d, yyyy')}
+                                                {format(parseISO(record.attendance_date), 'MMM d, yyyy')}
                                             </td>
                                             <td className="px-6 py-4 text-gray-500">
-                                                {format(parseISO(record.date), 'EEEE')}
+                                                {format(parseISO(record.attendance_date), 'EEEE')}
                                             </td>
                                             <td className="px-6 py-4">
                                                 {record.check_in ? (
@@ -159,7 +159,7 @@ export const EmployeeAttendance: React.FC = () => {
                                                 )}
                                             </td>
                                             <td className="px-6 py-4 font-medium text-gray-700">
-                                                {record.work_hours ? `${record.work_hours}h` : '—'}
+                                                {record.total_hours ? `${record.total_hours}h` : '—'}
                                             </td>
                                             <td className="px-6 py-4">
                                                 <StatusBadge variant={getAttendanceStatusVariant(record.status.toLowerCase())}>

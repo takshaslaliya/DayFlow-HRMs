@@ -25,7 +25,7 @@ export const getTodayAttendance = async (userId: string) => {
         .from('attendance')
         .select('*')
         .eq('employee_id', employee.id)
-        .eq('date', today)
+        .eq('attendance_date', today)
         .maybeSingle(); // Use maybeSingle to avoid error if no record exists
 
     if (error) throw new Error(error.message);
@@ -50,7 +50,7 @@ export const checkIn = async (userId: string) => {
         .from('attendance')
         .insert({
             employee_id: employee.id,
-            date: today,
+            attendance_date: today,
             check_in: time,
             status: status
         })
@@ -83,7 +83,7 @@ export const checkOut = async (attendanceId: string) => {
         .from('attendance')
         .update({
             check_out: time,
-            work_hours: hoursWorked
+            total_hours: hoursWorked
         })
         .eq('id', attendanceId)
         .select()
@@ -102,7 +102,7 @@ export const getMyAttendance = async (userId: string) => {
         .from('attendance')
         .select('*')
         .eq('employee_id', employee.id)
-        .order('date', { ascending: false });
+        .order('attendance_date', { ascending: false });
 
     if (error) throw new Error(error.message);
     return data as AttendanceRecord[];
@@ -113,7 +113,7 @@ export const getAllAttendance = async () => {
     const { data: attendanceRecords, error } = await supabase
         .from('attendance')
         .select('*')
-        .order('date', { ascending: false });
+        .order('attendance_date', { ascending: false });
 
     if (error) {
         console.error('Error fetching attendance:', error);
