@@ -56,9 +56,30 @@ export const AdminEmployees: React.FC = () => {
     // Create Employee Mutation
     const createMutation = useMutation({
         mutationFn: createEmployee,
-        onSuccess: () => {
+        onSuccess: (data) => {
             queryClient.invalidateQueries({ queryKey: ['employees'] });
-            toast.success('Employee added successfully');
+
+            // Show credentials to the admin
+            // We need the login_id from the user object, but createEmployee checks return type "employee".
+            // Ideally createEmployee should return { employee, user } or similar, but let's see what we can do.
+            // The api.ts createEmployee returns "employee".
+            // Wait, I need to modify createEmployee to return the login_id or I can't show it.
+            // Let's assume for now I will modify createEmployee to return { ...employee, user: userData } or similar in next step.
+            // But to fix this file logic:
+
+            toast.success(
+                <div className="space-y-2">
+                    <p className="font-bold">Employee Added Successfully!</p>
+                    <p>Credentials generated:</p>
+                    <p className="text-sm font-mono bg-zinc-800 text-white p-2 rounded">
+                        Login ID: {data.user?.login_id} <br />
+                        Password: {data.first_name}@123
+                    </p>
+                    <p className="text-xs opacity-90">Please share these with the employee.</p>
+                </div>,
+                { duration: 10000 }
+            );
+
             setIsAddModalOpen(false);
             resetForm();
         },
@@ -266,7 +287,12 @@ export const AdminEmployees: React.FC = () => {
                                                     />
                                                     <div>
                                                         <p className="font-medium text-gray-900">{employee.first_name} {employee.last_name}</p>
-                                                        <p className="text-sm text-gray-500">{employee.user?.email}</p>
+                                                        <div className="flex flex-col">
+                                                            <span className="text-xs font-mono text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded w-fit mb-0.5">
+                                                                ID: {employee.user?.login_id || 'N/A'}
+                                                            </span>
+                                                            <span className="text-sm text-gray-500">{employee.user?.email}</span>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </td>

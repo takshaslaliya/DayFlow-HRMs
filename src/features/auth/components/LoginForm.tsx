@@ -25,7 +25,7 @@ export function LoginForm() {
 
     const onSubmit = async (data: LoginInput) => {
         try {
-            await login(data.email, data.password);
+            await login(data.loginId, data.password);
             navigate('/dashboard');
         } catch (error) {
             // Error handling is managed by the store, but we can also set form error here if needed
@@ -45,22 +45,22 @@ export function LoginForm() {
             className="space-y-6"
         >
             <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700" htmlFor="email">
-                    Email Address
+                <label className="text-sm font-medium text-gray-700" htmlFor="loginId">
+                    Login ID / Email
                 </label>
                 <div className="relative">
                     <Mail className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
                     <Input
-                        id="email"
-                        type="email"
-                        placeholder="name@company.com"
+                        id="loginId"
+                        type="text"
+                        placeholder="john_doe or john@company.com"
                         className="pl-10 h-11 bg-gray-50 border-gray-200 focus:bg-white transition-colors"
-                        {...register('email')}
+                        {...register('loginId')}
                         disabled={isLoading}
                     />
                 </div>
-                {errors.email && (
-                    <p className="text-sm text-red-500">{errors.email.message}</p>
+                {errors.loginId && (
+                    <p className="text-sm text-red-500">{errors.loginId.message}</p>
                 )}
             </div>
 
@@ -114,6 +114,13 @@ export function LoginForm() {
                     </>
                 )}
             </Button>
+
+            <div className="text-center text-sm text-gray-600">
+                Don't have an account?{' '}
+                <a href="/signup" className="font-medium text-blue-600 hover:text-blue-500">
+                    Create admin account
+                </a>
+            </div>
         </motion.form>
     );
 }

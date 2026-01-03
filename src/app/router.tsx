@@ -10,6 +10,7 @@ import { LeavePage } from '@/features/leave/LeavePage';
 import { EmployeeProfile } from '@/features/profile/EmployeeProfile';
 import { AdminEmployees } from '@/features/admin/AdminEmployees';
 import { AdminPayroll } from '@/features/admin/AdminPayroll';
+import { AdminSignupPage } from '@/features/auth/AdminSignupPage';
 
 // Placeholder components for lazy loading
 // const Login = () => <div>Login Page</div>;
@@ -19,6 +20,7 @@ export function Router() {
         <BrowserRouter>
             <Routes>
                 <Route path="/login" element={<LoginPage />} />
+                <Route path="/signup" element={<AdminSignupPage />} />
 
                 {/* Protected Routes */}
                 <Route element={<ProtectedRoute />}>

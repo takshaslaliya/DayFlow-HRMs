@@ -10,6 +10,7 @@ export const getEmployees = async () => {
             *,
             user:users (
                 email,
+                login_id,
                 is_active
             )
         `);
@@ -46,6 +47,48 @@ export const getEmployeeByUserId = async (userId: string) => {
     return data;
 };
 
+// Helper: Generate Login ID
+const generateLoginId = async (firstName: string, lastName: string, dateOfJoining: string) => {
+    // 1. Prefix (Default to 'DF' for DayFlow)
+    const prefix = 'DF';
+
+    // 2. Name Part (First 2 chars of First + Last, uppercase)
+    const namePart = (firstName.substring(0, 2) + lastName.substring(0, 2)).toUpperCase();
+
+    // 3. Year Part
+    const year = new Date(dateOfJoining).getFullYear().toString();
+
+    // 4. Serial Number (Count employees joined in that year + 1)
+    // We need to query employees by joining year.
+    // Filter by date_of_joining range for that year
+    const startOfYear = `${year}-01-01`;
+    const endOfYear = `${year}-12-31`;
+
+    const { count, error } = await supabase
+        .from('employees')
+        .select('*', { count: 'exact', head: true })
+        .gte('date_of_joining', startOfYear)
+        .lte('date_of_joining', endOfYear);
+
+    if (error) {
+        console.error('Error counting employees:', error);
+        throw new Error('Failed to generate Login ID');
+    }
+
+    const serial = (count || 0) + 1;
+    const serialPart = serial.toString().padStart(4, '0');
+
+    return `${prefix}${namePart}${year}${serialPart}`;
+};
+
+// Helper: Generate Password
+const generatePassword = (firstName: string) => {
+    // Format: Name(NIT) -> interpreted as Name@123 or Name@2024 for now, or literally Name(NIT)
+    // Using a standard format based on the request style, but "NIT" likely meant an institution or company suffix.
+    // Let's use: Firstname@123
+    return `${firstName}@123`;
+};
+
 // Create a new employee (and user)
 export const createEmployee = async (employeeData: Record<string, any>) => {
     const { name, email, position, department, phone, address, salary, date_of_joining } = employeeData;
@@ -60,14 +103,20 @@ export const createEmployee = async (employeeData: Record<string, any>) => {
     const [firstName, ...lastNameParts] = name.split(' ');
     const lastName = lastNameParts.join(' ') || 'User';
 
-    const loginId = email.split('@')[0] + Math.floor(Math.random() * 1000);
+    // Generate custom Login ID and Password
+    const loginId = await generateLoginId(firstName, lastName, date_of_joining);
+    const generatedPassword = generatePassword(firstName);
+
+    // Hash the password using bcrypt
+    const { hashPassword } = await import('@/lib/password.utils');
+    const passwordHash = await hashPassword(generatedPassword);
 
     const { data: userData, error: userError } = await supabase
         .from('users')
         .insert({
             login_id: loginId,
-            email: email,
-            password_hash: 'defaultParams123!', // Placeholder
+            email: email, // Email is stored but Login ID is primary identifier for this flow
+            password_hash: passwordHash,
             role: 'EMPLOYEE',
             is_active: true
         })
@@ -110,12 +159,20 @@ export const createEmployee = async (employeeData: Record<string, any>) => {
         });
     }
 
-    return employee;
+    return {
+        ...employee,
+        user: userData,
+        // Include generated credentials for admin to display to new employee
+        generatedCredentials: {
+            loginId,
+            password: generatedPassword
+        }
+    };
 };
 
 // Update an employee
 export const updateEmployee = async (employeeId: string, employeeData: any) => {
-    const { name, email, position, department, phone, address, salary, date_of_joining } = employeeData;
+    const { name, position, department, phone, address, salary, date_of_joining } = employeeData;
 
     const [firstName, ...lastNameParts] = name.split(' ');
     const lastName = lastNameParts.join(' ') || '';
