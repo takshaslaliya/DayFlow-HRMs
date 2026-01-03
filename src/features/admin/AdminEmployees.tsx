@@ -1,6 +1,7 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     Search,
     Eye,
@@ -11,10 +12,10 @@ import {
     Briefcase,
     Calendar,
     X,
-    DollarSign,
-    Plus
+    Plus,
+    Loader2,
+    Trash2
 } from 'lucide-react';
-import { employees as initialEmployees } from '@/lib/mockData';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,13 +23,17 @@ import { PageTransition } from '@/components/layout/PageTransition';
 import { format } from 'date-fns';
 import { Modal } from '@/components/ui/Modal';
 import { toast } from 'sonner';
+import { getEmployees, createEmployee, deleteEmployee } from '@/features/employees/api';
+import type { Employee } from '@/types';
 
 export const AdminEmployees: React.FC = () => {
-    const [employees, setEmployees] = useState(initialEmployees);
+    const queryClient = useQueryClient();
     const [searchQuery, setSearchQuery] = useState('');
     const [departmentFilter, setDepartmentFilter] = useState<string>('all');
-    const [selectedEmployee, setSelectedEmployee] = useState<typeof initialEmployees[0] | null>(null);
+    const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+
+    // Form State
     const [newEmployee, setNewEmployee] = useState({
         name: '',
         email: '',
@@ -40,11 +45,54 @@ export const AdminEmployees: React.FC = () => {
         joinDate: format(new Date(), 'yyyy-MM-dd')
     });
 
-    const departments = ['all', ...new Set(employees.map(e => e.department))];
+    // Fetch Employees
+    const { data: employees = [], isLoading, error } = useQuery({
+        queryKey: ['employees'],
+        queryFn: getEmployees
+    });
 
-    const filteredEmployees = employees.filter(emp => {
-        const matchesSearch = emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            emp.email.toLowerCase().includes(searchQuery.toLowerCase());
+    // Create Employee Mutation
+    const createMutation = useMutation({
+        mutationFn: createEmployee,
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['employees'] });
+            toast.success('Employee added successfully');
+            setIsAddModalOpen(false);
+            setNewEmployee({
+                name: '',
+                email: '',
+                position: '',
+                department: '',
+                phone: '',
+                address: '',
+                salary: '',
+                joinDate: format(new Date(), 'yyyy-MM-dd')
+            });
+        },
+        onError: (err: any) => {
+            toast.error(err.message || 'Failed to add employee');
+        }
+    });
+
+    // Delete Employee Mutation
+    const deleteMutation = useMutation({
+        mutationFn: ({ employeeId, userId }: { employeeId: string, userId?: string }) =>
+            deleteEmployee(employeeId, userId),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['employees'] });
+            toast.success('Employee deleted successfully');
+        },
+        onError: (err: any) => {
+            toast.error(err.message || 'Failed to delete employee');
+        }
+    });
+
+    const departments = ['all', ...new Set(employees.map((e: Employee) => e.department).filter(Boolean) as string[])];
+
+    const filteredEmployees = employees.filter((emp: Employee) => {
+        const fullName = `${emp.first_name} ${emp.last_name}`;
+        const matchesSearch = fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            emp.user?.email.toLowerCase().includes(searchQuery.toLowerCase());
         const matchesDepartment = departmentFilter === 'all' || emp.department === departmentFilter;
         return matchesSearch && matchesDepartment;
     });
@@ -55,28 +103,25 @@ export const AdminEmployees: React.FC = () => {
             return;
         }
 
-        const employee = {
-            id: (employees.length + 1).toString(),
-            ...newEmployee,
-            salary: Number(newEmployee.salary) || 0,
-            status: 'active' as const,
-            avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(newEmployee.name)}&background=random`,
-        };
-
-        setEmployees([...employees, employee]);
-        setIsAddModalOpen(false);
-        setNewEmployee({
-            name: '',
-            email: '',
-            position: '',
-            department: '',
-            phone: '',
-            address: '',
-            salary: '',
-            joinDate: format(new Date(), 'yyyy-MM-dd')
+        createMutation.mutate({
+            name: newEmployee.name,
+            email: newEmployee.email,
+            position: newEmployee.position,
+            department: newEmployee.department,
+            phone: newEmployee.phone,
+            address: newEmployee.address,
+            salary: newEmployee.salary,
+            date_of_joining: newEmployee.joinDate
         });
-        toast.success('Employee added successfully');
     };
+
+    if (error) {
+        return (
+            <div className="p-8 text-center text-red-500">
+                Failed to load employees. Please try again later.
+            </div>
+        );
+    }
 
     return (
         <PageTransition>
@@ -137,50 +182,85 @@ export const AdminEmployees: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
-                                {filteredEmployees.map((employee, index) => (
-                                    <motion.tr
-                                        key={employee.id}
-                                        initial={{ opacity: 0, x: -20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        transition={{ delay: index * 0.03 }}
-                                        className="hover:bg-gray-50/50 transition-colors"
-                                    >
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-3">
-                                                <img
-                                                    src={employee.avatar}
-                                                    alt={employee.name}
-                                                    className="w-10 h-10 rounded-full object-cover"
-                                                />
-                                                <div>
-                                                    <p className="font-medium text-gray-900">{employee.name}</p>
-                                                    <p className="text-sm text-gray-500">{employee.email}</p>
-                                                </div>
+                                {isLoading ? (
+                                    <tr>
+                                        <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                                            <div className="flex items-center justify-center gap-2">
+                                                <Loader2 className="w-5 h-5 animate-spin" />
+                                                Loading employees...
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4 text-gray-500">{employee.department}</td>
-                                        <td className="px-6 py-4 text-gray-500">{employee.position}</td>
-                                        <td className="px-6 py-4 text-gray-500">
-                                            {format(new Date(employee.joinDate), 'MMM d, yyyy')}
+                                    </tr>
+                                ) : filteredEmployees.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                                            No employees found.
                                         </td>
-                                        <td className="px-6 py-4">
-                                            <StatusBadge variant={employee.status === 'active' ? 'success' : 'muted'}>
-                                                {employee.status.charAt(0).toUpperCase() + employee.status.slice(1)}
-                                            </StatusBadge>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => setSelectedEmployee(employee)}
-                                                className="hover:bg-primary-50 hover:text-primary-600"
-                                            >
-                                                <Eye className="w-4 h-4 mr-2" />
-                                                View
-                                            </Button>
-                                        </td>
-                                    </motion.tr>
-                                ))}
+                                    </tr>
+                                ) : (
+                                    filteredEmployees.map((employee: Employee, index: number) => (
+                                        <motion.tr
+                                            key={employee.id}
+                                            initial={{ opacity: 0, x: -20 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            transition={{ delay: index * 0.03 }}
+                                            className="hover:bg-gray-50/50 transition-colors"
+                                        >
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-3">
+                                                    <img
+                                                        src={employee.profile_image || `https://ui-avatars.com/api/?name=${employee.first_name}+${employee.last_name}`}
+                                                        alt={employee.first_name}
+                                                        className="w-10 h-10 rounded-full object-cover"
+                                                    />
+                                                    <div>
+                                                        <p className="font-medium text-gray-900">{employee.first_name} {employee.last_name}</p>
+                                                        <p className="text-sm text-gray-500">{employee.user?.email}</p>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 text-gray-500">{employee.department}</td>
+                                            <td className="px-6 py-4 text-gray-500">{employee.designation}</td>
+                                            <td className="px-6 py-4 text-gray-500">
+                                                {format(new Date(employee.date_of_joining), 'MMM d, yyyy')}
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <StatusBadge variant={employee.user?.is_active ? 'success' : 'muted'}>
+                                                    {employee.user?.is_active ? 'Active' : 'Inactive'}
+                                                </StatusBadge>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-2">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => setSelectedEmployee(employee)}
+                                                        className="hover:bg-primary-50 hover:text-primary-600"
+                                                    >
+                                                        <Eye className="w-4 h-4 mr-2" />
+                                                        View
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            if (confirm('Are you sure you want to delete this employee? This action cannot be undone.')) {
+                                                                deleteMutation.mutate({
+                                                                    employeeId: employee.id,
+                                                                    userId: employee.user_id
+                                                                });
+                                                            }
+                                                        }}
+                                                        className="hover:bg-red-50 hover:text-red-600 text-gray-500"
+                                                    >
+                                                        <Trash2 className="w-4 h-4 mr-2" />
+                                                        Delete
+                                                    </Button>
+                                                </div>
+                                            </td>
+                                        </motion.tr>
+                                    ))
+                                )}
                             </tbody>
                         </table>
                     </div>
@@ -266,8 +346,12 @@ export const AdminEmployees: React.FC = () => {
                         <Button variant="outline" onClick={() => setIsAddModalOpen(false)}>
                             Cancel
                         </Button>
-                        <Button onClick={handleAddEmployee} className="bg-primary-600 hover:bg-primary-700 text-white">
-                            Add Employee
+                        <Button
+                            onClick={handleAddEmployee}
+                            disabled={createMutation.isPending}
+                            className="bg-primary-600 hover:bg-primary-700 text-white"
+                        >
+                            {createMutation.isPending ? 'Adding...' : 'Add Employee'}
                         </Button>
                     </div>
                 </div>
@@ -307,15 +391,15 @@ export const AdminEmployees: React.FC = () => {
                                 {/* Profile Header */}
                                 <div className="text-center mb-6">
                                     <img
-                                        src={selectedEmployee.avatar}
-                                        alt={selectedEmployee.name}
+                                        src={selectedEmployee.profile_image || `https://ui-avatars.com/api/?name=${selectedEmployee.first_name}+${selectedEmployee.last_name}`}
+                                        alt={selectedEmployee.first_name}
                                         className="w-24 h-24 rounded-2xl object-cover mx-auto mb-4 border-4 border-gray-50"
                                     />
-                                    <h3 className="text-xl font-bold text-gray-900">{selectedEmployee.name}</h3>
-                                    <p className="text-gray-500">{selectedEmployee.position}</p>
+                                    <h3 className="text-xl font-bold text-gray-900">{selectedEmployee.first_name} {selectedEmployee.last_name}</h3>
+                                    <p className="text-gray-500">{selectedEmployee.designation}</p>
                                     <div className="flex justify-center mt-2">
-                                        <StatusBadge variant={selectedEmployee.status === 'active' ? 'success' : 'muted'}>
-                                            {selectedEmployee.status.charAt(0).toUpperCase() + selectedEmployee.status.slice(1)}
+                                        <StatusBadge variant={selectedEmployee.user?.is_active ? 'success' : 'muted'}>
+                                            {selectedEmployee.user?.is_active ? 'Active' : 'Inactive'}
                                         </StatusBadge>
                                     </div>
                                 </div>
@@ -323,13 +407,14 @@ export const AdminEmployees: React.FC = () => {
                                 {/* Info Cards */}
                                 <div className="space-y-4">
                                     {[
-                                        { icon: Mail, label: 'Email', value: selectedEmployee.email },
+                                        { icon: Mail, label: 'Email', value: selectedEmployee.user?.email },
                                         { icon: Phone, label: 'Phone', value: selectedEmployee.phone },
                                         { icon: Building2, label: 'Department', value: selectedEmployee.department },
-                                        { icon: Briefcase, label: 'Position', value: selectedEmployee.position },
-                                        { icon: Calendar, label: 'Join Date', value: format(new Date(selectedEmployee.joinDate), 'MMMM d, yyyy') },
+                                        { icon: Briefcase, label: 'Position', value: selectedEmployee.designation },
+                                        { icon: Calendar, label: 'Join Date', value: format(new Date(selectedEmployee.date_of_joining), 'MMMM d, yyyy') },
                                         { icon: MapPin, label: 'Address', value: selectedEmployee.address },
-                                        { icon: DollarSign, label: 'Annual Salary', value: `$${selectedEmployee.salary.toLocaleString()} ` },
+                                        // Salary info might need real data if we want to show it, or keep dynamic if we don't have it on this object
+                                        // { icon: DollarSign, label: 'Annual Salary', value: `$${selectedEmployee.salary?.toLocaleString()} ` },
                                     ].map((item, index) => (
                                         <motion.div
                                             key={item.label}
@@ -343,7 +428,7 @@ export const AdminEmployees: React.FC = () => {
                                             </div>
                                             <div>
                                                 <p className="text-sm text-gray-500">{item.label}</p>
-                                                <p className="font-medium text-gray-900">{item.value}</p>
+                                                <p className="font-medium text-gray-900">{item.value || 'N/A'}</p>
                                             </div>
                                         </motion.div>
                                     ))}

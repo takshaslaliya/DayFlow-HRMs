@@ -68,7 +68,7 @@ export const EmployeeDashboard: React.FC = () => {
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
                         <h2 className="text-2xl font-bold text-gray-900">
-                            Good {new Date().getHours() < 12 ? 'Morning' : 'Afternoon'}, {user?.name?.split(' ')[0]}! 👋
+                            Good {new Date().getHours() < 12 ? 'Morning' : 'Afternoon'}, {(user?.metadata?.name || user?.email || 'User').split(' ')[0]}! 👋
                         </h2>
                         <p className="text-gray-500 mt-1">
                             Here's your work summary for today
